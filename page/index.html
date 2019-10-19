@@ -1,0 +1,160 @@
+<html>
+<head>
+<style>
+.hit{
+  color: blue;
+  font-weight: bold;
+}
+#table{
+  width: 100%;
+}
+#table td{
+  width: 50%;
+  vertical-align: top;
+}
+#twits div{
+  word-wrap: break-word;
+}
+#twits {
+  font-size: xx-small;
+}
+textarea{
+  width: 100%;
+  height: 200px;
+}
+</style>
+<script src="kuromoji.js"></script>
+</head>
+<body>
+<h1>twitter searchテスト</h1>
+<table id="table">
+  <td>
+   <textarea id="text"></textarea>
+  </td>
+  <td>
+    <div id="twits">test</div>
+  </td>
+</table>
+<div id="result"></div>
+<script>
+
+var textElm = document.getElementById("text");
+var resultElm = document.getElementById("result");
+var twitsElm = document.getElementById("twits");
+var timer = null;
+var allTwits;
+
+function xhr(url, f){
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', url, true);
+  xhr.onreadystatechange = function(o){
+    if (xhr.readyState === 4 && xhr.status === 200){
+      f(xhr.responseText)
+    }
+    if (xhr.readyState === 4 && xhr.status === 404){
+      f("{}")
+    }
+  };
+  xhr.send(null);
+}
+
+function isKeyword(s){
+  if(s.match(/^[\u3041-\u3096]+$/) && s.length < 5){
+    return false;
+  }
+  return true
+}
+
+xhr("./tweets.csv",function(o){
+  allTwits = o.split(/[\r\n]+/);
+})
+
+textElm.addEventListener("input", function(){
+  if(timer != null){
+    clearTimeout(timer);
+    timer = null;
+  }
+  timer = setTimeout(function(){
+    timer = null;
+    analyze(textElm.value);
+  },1000);
+});
+
+function analyze(s){
+  console.log(s);
+  kuromoji.builder({ dicPath: "./dict" }).build(function(err, tokenizer){
+    if(err){
+      console.log(err);
+    } else {
+      var tokens = tokenizer.tokenize(s);
+      console.log(tokens);
+      var searchList = [];
+      resultElm.innerHTML = "";
+      tokens.forEach(function(v){
+        var text = v.surface_form + ":" + v.pos
+        if(isKeyword(v.surface_form) && (v.pos == "名詞")){
+          searchList.push(v.surface_form);
+          text = "*" + text;
+        }
+        var t = document.createTextNode(text)
+        var e = document.createElement("div")
+        e.appendChild(t);
+        resultElm.appendChild(e);
+
+      });
+      var re = new RegExp(searchList.join("|"),"i");
+      var result = [];
+      twitsElm.innerHTML = "";
+      allTwits.forEach(function(t){
+        if(t.search(re) != -1){
+          var count = 0;
+          searchList.forEach(function(w){
+            if(t.search(new RegExp(w,"i")) != -1){
+              count ++;
+            }
+          });
+          result.push([count, t]);
+        }
+      });
+      result.sort(function(a,b){return -a[0] + b[0]})
+      var limitCount = 0;
+      result.forEach(function(t){
+          if(limitCount > 50)return;
+          //console.log(t);
+          try{
+            var list = t[1].split(",")
+            if(list.length >= 6){
+              var text = list[5].replace(/"/g,"");
+              var e = document.createElement("div")
+              searchList.forEach(function(w){
+                text = text.replace(new RegExp(w,"gi"), '<span class="hit">'+w+'</span>')
+              });
+
+              e.innerHTML = t[0] + ":" + text
+              twitsElm.appendChild(e);
+              limitCount ++;
+            }
+          }catch(e){}
+      });
+      /*
+      xhr("/search?q=" + encodeURIComponent(searchList.join(" OR ") + " from:ina_ani"),function(o){
+        var obj = JSON.parse(o);
+        console.log(obj)
+        twitsElm.innerHTML = "";
+        obj.statuses.forEach(function(t){
+          var text = t.text;
+          var t = document.createTextNode(text)
+          var e = document.createElement("div")
+          e.appendChild(t);
+          twitsElm.appendChild(e);
+        })
+      })
+      */
+    }
+  });
+}
+
+</script>
+
+</body>
+</html>
